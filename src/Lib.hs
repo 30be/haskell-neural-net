@@ -5,11 +5,13 @@ import qualified Data.ByteString.Lazy as L
 import Data.Bifunctor (bimap)
 import Data.Bits (Bits (xor))
 import Data.Char (digitToInt)
+import Data.Foldable (maximumBy)
 import Data.Function (on)
 import Data.List (transpose, unfoldr)
 import Data.List.Split (chunksOf)
+import Data.Ord (comparing)
 import Data.Word (Word8)
-import Debug.Trace (trace)
+import Debug.Trace (trace, traceShow)
 import GHC.Char (chr)
 import System.Random
 
@@ -68,9 +70,6 @@ zLayer inputActivations (biases, weightMatrix) = weightMatrix *. inputActivation
 applyLayer :: [WeightedInput] -> Layer -> [WeightedInput]
 applyLayer = zLayer . map relu
 
-feed :: [Activation] -> [Layer] -> [Activation]
-feed = foldl applyLayer
-
 backpropagate :: [[ErrorDelta]] -> ([[Weight]], [WeightedInput]) -> [[ErrorDelta]]
 backpropagate (e : rrors) (weightMatrix, weightedInput) = currentErrors : e : rrors
  where
@@ -90,7 +89,7 @@ descend :: [Float] -> [Float] -> [Float]
 descend values gradients = zipWith (-) values $ (learningRate *) <$> gradients
 
 learn :: [Layer] -> ([Activation], [Activation]) -> [Layer]
-learn layers (input, output) = trace "x" $ zip biasVectors weightMatrices
+learn layers (input, output) = zip biasVectors weightMatrices
  where
   (layerActivations, layerGradients) = deltas input output layers
   biasVectors = zipWith descend (fst <$> layers) layerGradients -- How does that work that i apply gradients to biases just like this
@@ -123,5 +122,21 @@ parseImages, parseLabels :: L.ByteString -> [[Activation]]
 parseImages = map (map ((/ 256) . fromIntegral) . L.unpack) . chunksOf' imageSize . L.drop (fromIntegral imagesHeaderSize)
 parseLabels = map getLabelActivation . L.unpack . L.drop (fromIntegral labelsHeaderSize)
 
-train :: L.ByteString -> L.ByteString -> [Layer]
-train images labels = foldl learn (newBrain [imageSize, 30, 10]) $ zip (parseImages images) (parseLabels labels)
+train :: L.ByteString -> L.ByteString -> Int -> [Layer]
+train images labels amount = foldl learn (newBrain [imageSize, 30, 10]) $ take amount $ zip (parseImages images) (parseLabels labels)
+
+maximumIndex :: (Ord a, Num b, Enum b) => [a] -> b
+maximumIndex xs = snd $ maximumBy (comparing fst) (zip xs [0 ..])
+
+hammingDistance :: (Eq a) => ([a], [a]) -> Int
+hammingDistance = length . filter (uncurry (==)) . uncurry zip
+
+test :: [Layer] -> L.ByteString -> L.ByteString -> String
+test layers images labels = "Success rate: " ++ show (length parsedImages `fdiv` hammingDistance (parsedLabels, predictedLabels) :: Float)
+ where
+  parsedImages = parseImages images
+  parsedLabels = map maximumIndex $ parseLabels labels
+  predictedLabels = map guess parsedImages
+  guess :: [Activation] -> Int
+  guess activations = maximumIndex $ foldl applyLayer activations layers
+  fdiv = (/) `on` fromIntegral

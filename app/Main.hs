@@ -26,25 +26,29 @@ drawImageN n = L.readFile trainingImages >>= putStrLn . renderImage . getImage n
 printLabelN :: Int -> IO ()
 printLabelN n = L.readFile trainingLabels >>= print . getLabel n . decompress
 
-trainModel :: IO ()
-trainModel = do
+trainModel :: Int -> IO ()
+trainModel amount = do
   images <- L.readFile trainingImages
   labels <- L.readFile trainingLabels
   putStrLn "Started training..."
-  let model = train images labels
+  let model = train images labels amount
   putStrLn "Training complete."
   writeFile "model" $ show model
   putStrLn "model is saved to 'model' file"
 
 testModel :: IO ()
 testModel = do
-  putStrLn "not yet"
-
+  putStrLn "Loading model..."
+  model <- read <$> readFile "model"
+  trainImages <- L.readFile trainingImages
+  trainLabels <- L.readFile trainingLabels
+  putStrLn "Testing..."
+  putStrLn $ test model trainImages trainLabels
 main :: IO ()
 main =
   getArgs >>= \case
     ["download"] -> downloadMNIST
-    ["train"] -> trainModel
+    ["train", amount] -> trainModel (read amount)
     ["test"] -> testModel
     ["draw", n] -> drawImageN (read n) >> printLabelN (read n)
     _ -> putStrLn "Only [download, draw n, train, test] commands are supported"
