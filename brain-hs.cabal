@@ -36,6 +36,8 @@ library
   build-depends:
       base >=4.7 && <5
     , bytestring
+    , directory
+    , http-conduit
     , random
     , split
     , zlib
@@ -54,6 +56,8 @@ executable brain-hs-exe
       base >=4.7 && <5
     , brain-hs
     , bytestring
+    , directory
+    , http-conduit
     , random
     , split
     , zlib
@@ -73,6 +77,8 @@ test-suite brain-hs-test
       base >=4.7 && <5
     , brain-hs
     , bytestring
+    , directory
+    , http-conduit
     , random
     , split
     , zlib

@@ -1,24 +1,50 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Main (main) where
 
-import Lib
 import Codec.Compression.GZip (decompress)
+import qualified Data.ByteString.Lazy as L
+import Lib
+import Network.HTTP.Conduit (simpleHttp)
+import System.Directory.Internal.Prelude (getArgs)
 
+trainingImages, trainingLabels, testingImages, testingLabels, mnistLink :: String
 trainingImages = "train-images-idx3-ubyte.gz"
 trainingLabels = "train-labels-idx1-ubyte.gz"
 testingImages = "t10k-images-idx3-ubyte.gz"
-testingImages = "t10k-labels-idx3-ubyte.gz"
+testingLabels = "t10k-labels-idx1-ubyte.gz"
 mnistLink = "https://storage.googleapis.com/cvdf-datasets/mnist/"
 
 downloadMNIST :: IO ()
 downloadMNIST = mapM_ download [trainingImages, trainingLabels, testingImages, testingLabels]
-  where download fileName = simpleHTTP (mnistLink ++ fileName) >>= saveFile fileName
+ where
+  download fileName = putStrLn ("downloading " ++ fileName) >> simpleHttp (mnistLink ++ fileName) >>= L.writeFile fileName
 
 drawImageN :: Int -> IO ()
-drawImageN n = renderImage . getImage n . decompress <$> readFile trainingImages >>= putStrLn
+drawImageN n = L.readFile trainingImages >>= putStrLn . renderImage . getImage n . decompress
+
+printLabelN :: Int -> IO ()
+printLabelN n = L.readFile trainingLabels >>= print . getLabel n . decompress
+
+trainModel :: IO ()
+trainModel = do
+  images <- L.readFile trainingImages
+  labels <- L.readFile trainingLabels
+  putStrLn "Started training..."
+  let model = train images labels
+  putStrLn "Training complete."
+  writeFile "model" $ show model
+  putStrLn "model is saved to 'model' file"
+
+testModel :: IO ()
+testModel = do
+  putStrLn "not yet"
 
 main :: IO ()
-main = getArgs >>= \case
-  ["download"] -> downloadMNIST
-  --["train"] -> train
-  ["draw", n] -> drawImageN $ read n
-  _ -> putStrLn "Only download, draw n commands are supported"
+main =
+  getArgs >>= \case
+    ["download"] -> downloadMNIST
+    ["train"] -> trainModel
+    ["test"] -> testModel
+    ["draw", n] -> drawImageN (read n) >> printLabelN (read n)
+    _ -> putStrLn "Only [download, draw n, train, test] commands are supported"

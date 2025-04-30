@@ -25,6 +25,8 @@ dependencies:
 - bytestring
 - random
 - split
+- directory
+- http-conduit
 
 ghc-options:
 - -Wall
