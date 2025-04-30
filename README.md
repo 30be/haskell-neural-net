@@ -8,9 +8,10 @@ An attempt to write simple and legible MNIST classifier in haskell.
 2. In the project directory, run:
 
 ```sh
-stack run download  # download database
-stack run train <amount>   # train model on the first x images
-stack run test     # test model
+stack run download   # download database
+stack run train <x>  # train model on the first x images
+stack run test       # test model
+stack run draw <x>   # draw record number x in the console
 ```
 
 ## Inspiration source
