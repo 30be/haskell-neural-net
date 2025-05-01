@@ -20,35 +20,39 @@ downloadMNIST = mapM_ download [trainingImages, trainingLabels, testingImages, t
  where
   download fileName = putStrLn ("downloading " ++ fileName) >> simpleHttp (mnistLink ++ fileName) >>= L.writeFile fileName
 
+readGz :: FilePath -> IO L.ByteString
+readGz = (decompress <$>) . L.readFile
+
 drawImageN :: Int -> IO ()
-drawImageN n = L.readFile trainingImages >>= putStrLn . renderImage . getImage n . decompress
+drawImageN n = readGz trainingImages >>= putStrLn . renderImage . getImage n
 
 printLabelN :: Int -> IO ()
-printLabelN n = L.readFile trainingLabels >>= print . getLabel n . decompress
+printLabelN n = readGz trainingLabels >>= print . getLabel n
 
 trainModel :: Int -> IO ()
 trainModel amount = do
-  images <- L.readFile trainingImages
-  labels <- L.readFile trainingLabels
+  images <- readGz trainingImages
+  labels <- readGz trainingLabels
   putStrLn "Started training..."
   let model = train images labels amount
-  putStrLn "Training complete."
   writeFile "model" $ show model
+  putStrLn "Training complete."
   putStrLn "model is saved to 'model' file"
 
-testModel :: IO ()
-testModel = do
+testModel :: Int -> IO ()
+testModel amount = do
   putStrLn "Loading model..."
   model <- read <$> readFile "model"
-  trainImages <- L.readFile trainingImages
-  trainLabels <- L.readFile trainingLabels
+  testImages <- readGz testingImages
+  testLabels <- readGz testingLabels
   putStrLn "Testing..."
-  putStrLn $ test model trainImages trainLabels
+  putStrLn $ test model testImages testLabels amount
+
 main :: IO ()
 main =
   getArgs >>= \case
     ["download"] -> downloadMNIST
     ["train", amount] -> trainModel (read amount)
-    ["test"] -> testModel
+    ["test", amount] -> testModel (read amount)
     ["draw", n] -> drawImageN (read n) >> printLabelN (read n)
-    _ -> putStrLn "Only [download, draw n, train, test] commands are supported"
+    _ -> putStrLn "Only [download, draw n, train, test n] commands are supported"

@@ -2,18 +2,17 @@ module Lib where
 
 import qualified Data.ByteString.Lazy as L
 
-import Data.Bifunctor (bimap)
-import Data.Bits (Bits (xor))
-import Data.Char (digitToInt)
 import Data.Foldable (maximumBy)
 import Data.Function (on)
 import Data.List (transpose, unfoldr)
 import Data.List.Split (chunksOf)
 import Data.Ord (comparing)
 import Data.Word (Word8)
-import Debug.Trace (trace, traceShow)
-import GHC.Char (chr)
+import Debug.Trace (trace, traceShowId)
 import System.Random
+import Text.Printf (printf)
+
+-- TYPE DECLARATIONS --
 
 type LayerSize = Int
 type Bias = Float
@@ -23,6 +22,8 @@ type WeightedInput = Float
 type ErrorDelta = Float
 type Layer = ([Bias], [[Weight]])
 
+-- CONSTANTS --
+
 learningRate :: Float
 learningRate = 0.002
 imageWidth, imageSize, imagesHeaderSize, labelsHeaderSize :: Int
@@ -31,7 +32,8 @@ imageSize = imageWidth ^ (2 :: Integer)
 imagesHeaderSize = 16 -- magic number + amount + width + height
 labelsHeaderSize = 8
 
--- List for convenience
+-- UTILITY FUNCTIONS --
+
 gauss :: Float -> [Float] -> Float
 gauss scale [x1, x2] = scale * sqrt ((-2) * log x1) * cos (2 * pi * x2)
 gauss _ _ = error "Gauss distribution has 2 args"
@@ -44,25 +46,31 @@ newBrain sizes = zipWith3 makeLayer sizes (tail sizes) [0 ..]
  where
   makeLayer m n i = (replicate n 1.0, replicate n $ take m $ gaussSequence (mkStdGen i) 0.01)
 
-relu :: WeightedInput -> Activation
-relu = max 0
-
-relu' :: Float -> Float
-relu' x = if x < 0 then 0 else 1
-
--- derivative of the cost function
--- TODO:
-cost' :: Activation -> Activation -> Float
-cost' actual desired = if desired == 1 && actual >= desired then 0 else actual - desired
-
 (+.) :: (Num c) => [c] -> [c] -> [c]
 (+.) = zipWith (+)
 
 (*.) :: (Num c) => [[c]] -> [c] -> [c]
 (*.) matrix vector = sum . zipWith (*) vector <$> matrix
 
-dot :: (Num a) => [a] -> [a] -> a
-dot = (sum .) . zipWith (*)
+chunksOf' :: Int -> L.ByteString -> [L.ByteString]
+chunksOf' n = unfoldr (\b -> if L.null b then Nothing else Just (L.splitAt (fromIntegral n) b))
+
+maximumIndex :: (Ord a, Num b, Enum b) => [a] -> b
+maximumIndex = fst . maximumBy (comparing snd) . zip [0 ..]
+
+hammingDistance :: ([Int], [Int]) -> Int
+hammingDistance = length . filter (uncurry (==)) . uncurry zip
+
+-- NEURAL NET --
+
+relu :: WeightedInput -> Activation
+relu = max 0
+
+relu' :: Float -> Float
+relu' x = if x <= 0 then 0 else 1 -- TODO: Is <= ok here?
+
+cost' :: Activation -> Activation -> Float
+cost' actual desired = if desired == 1 && actual >= desired then 0 else actual - desired
 
 zLayer :: [Activation] -> Layer -> [WeightedInput]
 zLayer inputActivations (biases, weightMatrix) = weightMatrix *. inputActivations +. biases
@@ -73,11 +81,12 @@ applyLayer = zLayer . map relu
 backpropagate :: [[ErrorDelta]] -> ([[Weight]], [WeightedInput]) -> [[ErrorDelta]]
 backpropagate (e : rrors) (weightMatrix, weightedInput) = currentErrors : e : rrors
  where
-  currentErrors = zipWith (*) (dot e <$> weightMatrix) (relu' <$> weightedInput)
-backpropagate _ _ = error "backpropagate called with empty error vector"
+  currentErrors = zipWith (*) (weightMatrix *. e) (relu' <$> weightedInput)
+backpropagate _ _ = error "backpropagate called with empty error vector!"
 
+-- TODO: tail was added below with mindless GPT advice
 deltas :: [Activation] -> [Activation] -> [Layer] -> ([[Activation]], [[ErrorDelta]])
-deltas inputs desiredOutputs layers = (activations, foldl backpropagate [delta0] $ reverse weightsInputs)
+deltas inputs desiredOutputs layers = (activations, tail $ foldl backpropagate [delta0] $ reverse weightsInputs)
  where
   weightedInputs = scanl applyLayer inputs layers
   activations = map relu <$> weightedInputs
@@ -96,11 +105,7 @@ learn layers (input, output) = zip biasVectors weightMatrices
   weightMatrices = zipWith3 (zipWith . updateWeightMatrix) layerActivations (snd <$> layers) layerGradients
   updateWeightMatrix activations weights gradients = descend weights ((gradients *) <$> activations)
 
-renderImage :: [Activation] -> [Char]
-renderImage = unlines . chunksOf (imageWidth * 2) . concatMap (replicate 2 . render)
- where
-  gradient = " .:oO@"
-  render color = gradient !! floor (color * fromIntegral (length gradient)) -- ? should never happen
+-- TESTING AND ANALYSIS --
 
 getImage :: Int -> L.ByteString -> [Activation]
 getImage n images = getColor <$> indexes
@@ -111,9 +116,11 @@ getImage n images = getColor <$> indexes
 getLabel :: Int -> L.ByteString -> Int
 getLabel n labels = toEnum $ fromEnum $ L.index labels $ fromIntegral $ labelsHeaderSize + n
 
--- | Splits a lazy ByteString into chunks of size n. - not tested
-chunksOf' :: Int -> L.ByteString -> [L.ByteString]
-chunksOf' n = unfoldr (\b -> if L.null b then Nothing else Just (L.splitAt (fromIntegral n) b))
+renderImage :: [Activation] -> [Char]
+renderImage = unlines . chunksOf (imageWidth * 2) . concatMap (replicate 2 . render)
+ where
+  gradient = " .:oO@"
+  render color = gradient !! floor (color * fromIntegral (length gradient)) -- ? should never happen
 
 getLabelActivation :: Word8 -> [Activation]
 getLabelActivation = map (fromIntegral . fromEnum) . flip map [0 .. 9] . (==)
@@ -123,20 +130,31 @@ parseImages = map (map ((/ 256) . fromIntegral) . L.unpack) . chunksOf' imageSiz
 parseLabels = map getLabelActivation . L.unpack . L.drop (fromIntegral labelsHeaderSize)
 
 train :: L.ByteString -> L.ByteString -> Int -> [Layer]
-train images labels amount = foldl learn (newBrain [imageSize, 30, 10]) $ take amount $ zip (parseImages images) (parseLabels labels)
-
-maximumIndex :: (Ord a, Num b, Enum b) => [a] -> b
-maximumIndex xs = snd $ maximumBy (comparing fst) (zip xs [0 ..])
-
-hammingDistance :: (Eq a) => ([a], [a]) -> Int
-hammingDistance = length . filter (uncurry (==)) . uncurry zip
-
-test :: [Layer] -> L.ByteString -> L.ByteString -> String
-test layers images labels = "Success rate: " ++ show (length parsedImages `fdiv` hammingDistance (parsedLabels, predictedLabels) :: Float)
+train images labels amount = foldl learn brain trainingData
  where
-  parsedImages = parseImages images
-  parsedLabels = map maximumIndex $ parseLabels labels
+  brain = newBrain [imageSize, 30, 10]
+  trainingData = take amount $ zip (parseImages images) (parseLabels labels)
+
+-- showData = concatMap (\(a, b) -> renderImage a ++ drawActivations b) . take 10 -- trace (showData trainingData)
+
+drawActivations :: [Activation] -> String
+drawActivations = unlines . zipWith drawActivation [0 ..]
+ where
+  drawActivation :: Int -> Activation -> String
+  drawActivation i a = show i ++ ": " ++ replicate (round a * 10) '#'
+
+test :: [Layer] -> L.ByteString -> L.ByteString -> Int -> String
+test layers images labels amount =
+  printf
+    "Success rate: %.2f%% (%d of %d)\n"
+    (100 * rightGuesses `fdiv` length parsedImages :: Float)
+    rightGuesses
+    (length parsedImages)
+ where
+  parsedImages = take amount $ parseImages images
+  parsedLabels = take amount $ map maximumIndex $ parseLabels labels
   predictedLabels = map guess parsedImages
   guess :: [Activation] -> Int
   guess activations = maximumIndex $ foldl applyLayer activations layers
   fdiv = (/) `on` fromIntegral
+  rightGuesses = hammingDistance (parsedLabels, predictedLabels)

@@ -78,6 +78,7 @@ test-suite brain-hs-test
     , brain-hs
     , bytestring
     , directory
+    , hspec
     , http-conduit
     , random
     , split
