@@ -24,6 +24,47 @@ stack run test on <x>       # test model on test sample x
 stack run draw <x>          # draw record number x in the console
 ```
 
+## Notes
+
+```
+
+
+        ..@@@@@@@@@@oooooo  ....
+        ::@@@@@@@@@@@@@@@@@@@@@@OO::..
+          ::oo::::::OOOOOO@@@@@@@@@@@@@@oo
+                          ..::::OO@@@@@@@@
+                                    oo@@@@oo
+                                      @@@@
+                                    ::@@@@::
+                                    @@@@@@
+                                  ::@@@@oo
+                                  @@@@@@
+                                OO@@@@::
+                              oo@@@@@@
+                            ::@@@@@@..
+                          ..@@@@@@..
+                          @@@@@@oo
+                        ::@@@@OO
+                      ..@@@@@@..
+                      @@@@@@OO
+                    ..@@@@OO
+                      @@OO
+
+
+0(-1.46):
+1(-4.44):
+2(-1.47):
+3(-1.42):
+4(-2.64):
+5(-1.49):
+6(-1.62):
+7(1.30): #############
+8(-1.47):
+9(-1.77):
+```
+
+Output looks like this. It has a bug now, which affects amount of images guessed right - many coefficients are negative
+
 ## Inspiration source
 
 <https://crypto.stanford.edu/~blynn/haskell/brain.html>
