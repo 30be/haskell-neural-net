@@ -5,6 +5,9 @@ module Lib where
 -- 2. Switch to vectors
 -- 3. Rewrite learn without so much zipWith
 -- 4. Add batching(???) to train function
+-- 5. Profile
+-- 6. Write cost function
+-- 7. I am sure there are bugs with relu application. Do we need to apply relu to the last layer?
 
 import qualified Data.ByteString.Lazy as L
 
@@ -126,7 +129,7 @@ renderImage :: [Activation] -> [Char]
 renderImage = unlines . chunksOf (imageWidth * 2) . concatMap (replicate 2 . render)
  where
   gradient = " .:oO@"
-  render color = gradient !! floor (color * fromIntegral (length gradient)) -- ? should never happen
+  render color = gradient !! floor (color * fromIntegral (length gradient))
 
 getLabelActivation :: Word8 -> [Activation]
 getLabelActivation = map (fromIntegral . fromEnum) . flip map [0 .. 9] . (==)
