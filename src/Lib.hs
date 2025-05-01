@@ -1,5 +1,11 @@
 module Lib where
 
+-- TODO:
+-- 1. use nonEmpty where possible
+-- 2. Switch to vectors
+-- 3. Rewrite learn without so much zipWith
+-- 4. Add batching(???) to train function
+
 import qualified Data.ByteString.Lazy as L
 
 import Data.Foldable (maximumBy)
@@ -8,7 +14,6 @@ import Data.List (transpose, unfoldr)
 import Data.List.Split (chunksOf)
 import Data.Ord (comparing)
 import Data.Word (Word8)
-import Debug.Trace (trace, traceShowId)
 import System.Random
 import Text.Printf (printf)
 
@@ -46,8 +51,9 @@ newBrain sizes = zipWith3 makeLayer sizes (tail sizes) [0 ..]
  where
   makeLayer m n i = (replicate n 1.0, replicate n $ take m $ gaussSequence (mkStdGen i) 0.01)
 
-(+.) :: (Num c) => [c] -> [c] -> [c]
+(+.), (-.) :: (Num c) => [c] -> [c] -> [c]
 (+.) = zipWith (+)
+(-.) = zipWith (-)
 
 (*.) :: (Num c) => [[c]] -> [c] -> [c]
 (*.) matrix vector = sum . zipWith (*) vector <$> matrix
@@ -86,16 +92,16 @@ backpropagate _ _ = error "backpropagate called with empty error vector!"
 
 -- TODO: tail was added below with mindless GPT advice
 deltas :: [Activation] -> [Activation] -> [Layer] -> ([[Activation]], [[ErrorDelta]])
-deltas inputs desiredOutputs layers = (activations, tail $ foldl backpropagate [delta0] $ reverse weightsInputs)
+deltas inputs desiredOutputs layers = (activations, tail $ foldl backpropagate [delta0] $ reverse weightsAndInputs)
  where
   weightedInputs = scanl applyLayer inputs layers
   activations = map relu <$> weightedInputs
   delta0 = zipWith3 deltaI (last weightedInputs) (last activations) desiredOutputs
   deltaI input activation desired = cost' activation desired * relu' input -- Derivative of cost function wrt weighted input
-  weightsInputs = zip (transpose . snd <$> layers) (init weightedInputs)
+  weightsAndInputs = zip (transpose . snd <$> layers) (init weightedInputs)
 
 descend :: [Float] -> [Float] -> [Float]
-descend values gradients = zipWith (-) values $ (learningRate *) <$> gradients
+descend values gradients = values -. ((learningRate *) <$> gradients)
 
 learn :: [Layer] -> ([Activation], [Activation]) -> [Layer]
 learn layers (input, output) = zip biasVectors weightMatrices
@@ -129,10 +135,9 @@ parseImages, parseLabels :: L.ByteString -> [[Activation]]
 parseImages = map (map ((/ 256) . fromIntegral) . L.unpack) . chunksOf' imageSize . L.drop (fromIntegral imagesHeaderSize)
 parseLabels = map getLabelActivation . L.unpack . L.drop (fromIntegral labelsHeaderSize)
 
-train :: L.ByteString -> L.ByteString -> Int -> [Layer]
-train images labels amount = foldl learn brain trainingData
+train :: L.ByteString -> L.ByteString -> Int -> [Layer] -> [Layer]
+train images labels amount model = foldl learn model trainingData
  where
-  brain = newBrain [imageSize, 30, 10]
   trainingData = take amount $ zip (parseImages images) (parseLabels labels)
 
 -- showData = concatMap (\(a, b) -> renderImage a ++ drawActivations b) . take 10 -- trace (showData trainingData)
@@ -141,7 +146,7 @@ drawActivations :: [Activation] -> String
 drawActivations = unlines . zipWith drawActivation [0 ..]
  where
   drawActivation :: Int -> Activation -> String
-  drawActivation i a = show i ++ ": " ++ replicate (round a * 10) '#'
+  drawActivation i a = printf "%d(%.2f): %s" i a $ replicate (round (a * 10)) '#'
 
 test :: [Layer] -> L.ByteString -> L.ByteString -> Int -> String
 test layers images labels amount =
