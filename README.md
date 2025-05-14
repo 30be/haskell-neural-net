@@ -8,7 +8,8 @@ It trains with on-line learning, processing all examples one-by-one by five minu
 
 Main inefficiency is caused by using matrices and vectors as a single linked lists in Haskell. As for a C++ developer, it sounds funny, but it works anyway.
 
-Current one-epoch training gets about 40% success rate, which is better than random...
+Current one-epoch training gets about only 40% success rate, which is better than random...
+But i will fix the bug some time..
 
 ## Usage
 
@@ -69,3 +70,5 @@ Output looks like this. It has a bug now, which affects amount of images guessed
 
 <https://crypto.stanford.edu/~blynn/haskell/brain.html>
 (but it actually is brainfuck there, not haskell.)
+
+i havent yet read but <https://jpmoresmau.blogspot.com/2007/06/very-dumb-neural-network-in-haskell.html> may have something to do with it

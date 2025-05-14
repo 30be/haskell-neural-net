@@ -1,16 +1,20 @@
 module Lib where
 
 -- TODO:
--- 1. use nonEmpty where possible
--- 2. Switch to vectors
--- 3. Rewrite learn without so much zipWith
--- 4. Add batching(???) to train function
--- 5. Profile
--- 6. Write cost function
--- 7. I am sure there are bugs with relu application. Do we need to apply relu to the last layer?
+-- - Rewrite learn in a legible way
+-- - (try to) rewrite backpropagate with scanl
+-- - Add batching(???) to train function
+-- - Write cost function explicitly, to get it
+-- - Do we need to apply relu to the last layer?
+-- - perhaps, vecorize? Too much manual work there, ask gemini pro
+
+-- FIX: STOP RIGHT HERE!!! GET GEAR-LEVEL MODEL FIRST. THEN MAKE CODE MORE CONCISE
+-- Your true understanding is measured by your ability to explain the code to a five yo
+-- AND I AM UNABLE TO DO THAT
 
 import qualified Data.ByteString.Lazy as L
 
+import Data.Bifunctor (Bifunctor (bimap))
 import Data.Foldable (maximumBy)
 import Data.Function (on)
 import Data.List (transpose, unfoldr)
@@ -26,9 +30,10 @@ type LayerSize = Int
 type Bias = Float
 type Weight = Float
 type Activation = Float
-type WeightedInput = Float
+type Preactivation = Float
 type ErrorDelta = Float
 type Layer = ([Bias], [[Weight]])
+type DeltaLayer = Layer
 
 -- CONSTANTS --
 
@@ -54,12 +59,21 @@ newBrain sizes = zipWith3 makeLayer sizes (tail sizes) [0 ..]
  where
   makeLayer m n i = (replicate n 1.0, replicate n $ take m $ gaussSequence (mkStdGen i) 0.01)
 
-(+.), (-.) :: (Num c) => [c] -> [c] -> [c]
+(+.), (*.) :: (Num c) => [c] -> [c] -> [c]
 (+.) = zipWith (+)
-(-.) = zipWith (-)
+(*.) = zipWith (*)
 
-(*.) :: (Num c) => [[c]] -> [c] -> [c]
-(*.) matrix vector = sum . zipWith (*) vector <$> matrix
+(*^) :: (Functor f, Num b) => f [b] -> [b] -> f b
+(*^) matrix vector = sum . zipWith (*) vector <$> matrix
+
+class Subtractable a where
+  (-.) :: a -> a -> a
+instance Subtractable Float where
+  (-.) = (-)
+instance (Subtractable a) => Subtractable [a] where
+  (-.) = zipWith (-.)
+instance (Subtractable c, Subtractable d) => Subtractable (c, d) where
+  (c1, d1) -. (c2, d2) = (c1 -. c2, d1 -. d2)
 
 chunksOf' :: Int -> L.ByteString -> [L.ByteString]
 chunksOf' n = unfoldr (\b -> if L.null b then Nothing else Just (L.splitAt (fromIntegral n) b))
@@ -72,30 +86,25 @@ hammingDistance = length . filter (uncurry (==)) . uncurry zip
 
 -- NEURAL NET --
 
-relu :: WeightedInput -> Activation
+relu :: Preactivation -> Activation
 relu = max 0
 
 relu' :: Float -> Float
 relu' x = if x <= 0 then 0 else 1 -- TODO: Is <= ok here?
 
-cost' :: Activation -> Activation -> Float
+cost, cost' :: Activation -> Activation -> Float
+cost actual desired = (actual - desired) ** 2 / 2
 cost' actual desired = if desired == 1 && actual >= desired then 0 else actual - desired
 
-zLayer :: [Activation] -> Layer -> [WeightedInput]
-zLayer inputActivations (biases, weightMatrix) = weightMatrix *. inputActivations +. biases
+applyLayer :: [Activation] -> Layer -> [Preactivation]
+applyLayer activations (biases, weightMatrix) = relu <$> weightMatrix *^ activations +. biases
 
-applyLayer :: [WeightedInput] -> Layer -> [WeightedInput]
-applyLayer = zLayer . map relu
+backpropagate :: [ErrorDelta] -> ([[Weight]], [Activation]) -> [ErrorDelta]
+backpropagate e (weightMatrix, activations) = (weightMatrix *^ e) *. activations
 
-backpropagate :: [[ErrorDelta]] -> ([[Weight]], [WeightedInput]) -> [[ErrorDelta]]
-backpropagate (e : rrors) (weightMatrix, weightedInput) = currentErrors : e : rrors
- where
-  currentErrors = zipWith (*) (weightMatrix *. e) (relu' <$> weightedInput)
-backpropagate _ _ = error "backpropagate called with empty error vector!"
-
--- TODO: tail was added below with mindless GPT advice
-deltas :: [Activation] -> [Activation] -> [Layer] -> ([[Activation]], [[ErrorDelta]])
-deltas inputs desiredOutputs layers = (activations, tail $ foldl backpropagate [delta0] $ reverse weightsAndInputs)
+-- TODO: This function should return scaled by learningRate deltaNetwork - the update
+deltas :: [Activation] -> [Activation] -> [Layer] -> [DeltaLayer]
+deltas inputs desiredOutputs layers = (activations, tail $ scanl backpropagate delta0 $ reverse weightsAndInputs)
  where
   weightedInputs = scanl applyLayer inputs layers
   activations = map relu <$> weightedInputs
@@ -103,16 +112,8 @@ deltas inputs desiredOutputs layers = (activations, tail $ foldl backpropagate [
   deltaI input activation desired = cost' activation desired * relu' input -- Derivative of cost function wrt weighted input
   weightsAndInputs = zip (transpose . snd <$> layers) (init weightedInputs)
 
-descend :: [Float] -> [Float] -> [Float]
-descend values gradients = values -. ((learningRate *) <$> gradients)
-
 learn :: [Layer] -> ([Activation], [Activation]) -> [Layer]
-learn layers (input, output) = zip biasVectors weightMatrices
- where
-  (layerActivations, layerGradients) = deltas input output layers
-  biasVectors = zipWith descend (fst <$> layers) layerGradients -- How does that work that i apply gradients to biases just like this
-  weightMatrices = zipWith3 (zipWith . updateWeightMatrix) layerActivations (snd <$> layers) layerGradients
-  updateWeightMatrix activations weights gradients = descend weights ((gradients *) <$> activations)
+learn layers (input, output) = layers -. deltas input output layers
 
 -- TESTING AND ANALYSIS --
 

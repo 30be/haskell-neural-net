@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       Lib
+      Math
   other-modules:
       Paths_brain_hs
   autogen-modules:
