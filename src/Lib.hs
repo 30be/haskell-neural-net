@@ -1,23 +1,10 @@
 module Lib where
 
--- TODO:
--- - Rewrite learn in a legible way
--- - (try to) rewrite backpropagate with scanl
--- - Add batching(???) to train function
--- - Write cost function explicitly, to get it
--- - Do we need to apply relu to the last layer?
--- - perhaps, vecorize? Too much manual work there, ask gemini pro
-
--- FIX: STOP RIGHT HERE!!! GET GEAR-LEVEL MODEL FIRST. THEN MAKE CODE MORE CONCISE
--- Your true understanding is measured by your ability to explain the code to a five yo
--- AND I AM UNABLE TO DO THAT
-
 import qualified Data.ByteString.Lazy as L
 
-import Data.Bifunctor (Bifunctor (bimap))
 import Data.Foldable (maximumBy)
 import Data.Function (on)
-import Data.List (transpose, unfoldr)
+import Data.List (mapAccumR, transpose, unfoldr)
 import Data.List.Split (chunksOf)
 import Data.Ord (comparing)
 import Data.Word (Word8)
@@ -90,7 +77,7 @@ relu :: Preactivation -> Activation
 relu = max 0
 
 relu' :: Float -> Float
-relu' x = if x <= 0 then 0 else 1 -- TODO: Is <= ok here?
+relu' x = if x <= 0 then 0 else 1
 
 cost, cost' :: Activation -> Activation -> Float
 cost actual desired = (actual - desired) ** 2 / 2
@@ -99,21 +86,18 @@ cost' actual desired = if desired == 1 && actual >= desired then 0 else actual -
 applyLayer :: [Activation] -> Layer -> [Preactivation]
 applyLayer activations (biases, weightMatrix) = relu <$> weightMatrix *^ activations +. biases
 
-backpropagate :: [ErrorDelta] -> ([[Weight]], [Activation]) -> [ErrorDelta]
-backpropagate e (weightMatrix, activations) = (weightMatrix *^ e) *. activations
-
--- TODO: This function should return scaled by learningRate deltaNetwork - the update
-deltas :: [Activation] -> [Activation] -> [Layer] -> [DeltaLayer]
-deltas inputs desiredOutputs layers = (activations, tail $ scanl backpropagate delta0 $ reverse weightsAndInputs)
+backpropagate :: [ErrorDelta] -> (Layer, [Activation]) -> ([ErrorDelta], DeltaLayer)
+backpropagate nextErrors ((_biases, weightMatrix), prevActivations) = (prevErrors, (deltaBiases, deltaWeights))
  where
-  weightedInputs = scanl applyLayer inputs layers
-  activations = map relu <$> weightedInputs
-  delta0 = zipWith3 deltaI (last weightedInputs) (last activations) desiredOutputs
-  deltaI input activation desired = cost' activation desired * relu' input -- Derivative of cost function wrt weighted input
-  weightsAndInputs = zip (transpose . snd <$> layers) (init weightedInputs)
+  deltaBiases = map (learningRate *) nextErrors
+  deltaWeights = [[x * y * learningRate | y <- prevActivations] | x <- nextErrors] -- TODO: not sure inside/out here
+  prevErrors = transpose weightMatrix *^ nextErrors *. map relu' prevActivations -- Actually relu' prevZ but who cares
+  -- TODO: Not sure with transpose.
 
 learn :: [Layer] -> ([Activation], [Activation]) -> [Layer]
-learn layers (input, output) = layers -. deltas input output layers
+learn layers (inputs, desiredOutputs) = layers -. snd (mapAccumR backpropagate (zipWith cost' (last computedActivations) desiredOutputs) (zip layers computedActivations))
+ where
+  computedActivations = scanl applyLayer inputs layers -- TODO: Check this...
 
 -- TESTING AND ANALYSIS --
 
@@ -143,8 +127,6 @@ train :: L.ByteString -> L.ByteString -> Int -> [Layer] -> [Layer]
 train images labels amount model = foldl learn model trainingData
  where
   trainingData = take amount $ zip (parseImages images) (parseLabels labels)
-
--- showData = concatMap (\(a, b) -> renderImage a ++ drawActivations b) . take 10 -- trace (showData trainingData)
 
 drawActivations :: [Activation] -> String
 drawActivations = unlines . zipWith drawActivation [0 ..]

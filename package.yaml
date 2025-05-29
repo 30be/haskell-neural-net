@@ -65,3 +65,4 @@ tests:
     dependencies:
     - brain-hs
     - hspec
+    - QuickCheck

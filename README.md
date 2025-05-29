@@ -8,7 +8,7 @@ It trains with on-line learning, processing all examples one-by-one by five minu
 
 Main inefficiency is caused by using matrices and vectors as a single linked lists in Haskell. As for a C++ developer, it sounds funny, but it works anyway.
 
-Current one-epoch training gets about only 40% success rate, which is better than random...
+Current one-epoch training gets 88.97% success rate, which can be improved with multiple epochs.
 But i will fix the bug some time..
 
 ## Usage
@@ -19,7 +19,7 @@ But i will fix the bug some time..
 ```sh
 stack run download          # download database
 stack run train <x>         # train model on the first x images
-stack run train further<x>  # train model on the first x images, taking existing model as a source
+stack run train further<x>  # train model on the first x images, taking existing model as a source(one-epoch, basically)
 stack run test <x>          # test model
 stack run test on <x>       # test model on test sample x
 stack run draw <x>          # draw record number x in the console
@@ -28,43 +28,51 @@ stack run draw <x>          # draw record number x in the console
 ## Notes
 
 ```
+~/dev/haskell-neural-net % stack run test on 10
 
 
-        ..@@@@@@@@@@oooooo  ....
-        ::@@@@@@@@@@@@@@@@@@@@@@OO::..
-          ::oo::::::OOOOOO@@@@@@@@@@@@@@oo
-                          ..::::OO@@@@@@@@
-                                    oo@@@@oo
-                                      @@@@
-                                    ::@@@@::
-                                    @@@@@@
-                                  ::@@@@oo
-                                  @@@@@@
-                                OO@@@@::
-                              oo@@@@@@
-                            ::@@@@@@..
-                          ..@@@@@@..
-                          @@@@@@oo
-                        ::@@@@OO
-                      ..@@@@@@..
-                      @@@@@@OO
-                    ..@@@@OO
-                      @@OO
 
 
-0(-1.46):
-1(-4.44):
-2(-1.47):
-3(-1.42):
-4(-2.64):
-5(-1.49):
-6(-1.62):
-7(1.30): #############
-8(-1.47):
-9(-1.77):
+                      ..    ::OO::::..
+                    OO@@@@@@@@@@@@@@@@@@..
+                  oo@@@@@@OOOOOOOOOO@@@@@@..
+                ..@@@@@@..          oo@@@@OO
+                ..@@@@::              oo@@@@..
+                ..@@oo                  @@@@oo
+                OO@@::                  oo@@OO
+                @@@@..                  ..@@OO
+              ::@@OO                    ..@@OO
+              @@@@..                    ..@@OO
+              @@OO                      ..@@OO
+              @@OO                      ..@@OO
+            ::@@OO                      oo@@OO
+            ::@@OO                    ..@@@@..
+            ::@@OO                  ..oo@@OO
+            ..@@OO                  oo@@@@..
+              @@OO            ..ooOO@@@@..
+              @@@@OOOOOOOOOOOO@@@@@@@@oo
+              ..OO@@@@@@@@@@@@@@@@@@::
+                  OO@@@@@@@@@@oo::
+
+
+
+
+
+0(0.84): ########
+1(0.00):
+2(0.00):
+3(0.00):
+4(0.00):
+5(0.00):
+6(0.00):
+7(0.00):
+8(0.00):
+9(0.00):
+
+best guess: 0.0
+
+
 ```
-
-Output looks like this. It has a bug now, which affects amount of images guessed right - many coefficients are negative
 
 ## Inspiration source
 
