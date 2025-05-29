@@ -9,7 +9,6 @@ It trains with on-line learning, processing all examples one-by-one by five minu
 Main inefficiency is caused by using matrices and vectors as a single linked lists in Haskell. As for a C++ developer, it sounds funny, but it works anyway.
 
 Current one-epoch training gets 88.97% success rate, which can be improved with multiple epochs.
-But i will fix the bug some time..
 
 ## Usage
 

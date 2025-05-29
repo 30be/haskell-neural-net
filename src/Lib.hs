@@ -79,8 +79,7 @@ relu = max 0
 relu' :: Float -> Float
 relu' x = if x <= 0 then 0 else 1
 
-cost, cost' :: Activation -> Activation -> Float
-cost actual desired = (actual - desired) ** 2 / 2
+cost' :: Activation -> Activation -> Float
 cost' actual desired = if desired == 1 && actual >= desired then 0 else actual - desired
 
 applyLayer :: [Activation] -> Layer -> [Preactivation]
@@ -90,14 +89,15 @@ backpropagate :: [ErrorDelta] -> (Layer, [Activation]) -> ([ErrorDelta], DeltaLa
 backpropagate nextErrors ((_biases, weightMatrix), prevActivations) = (prevErrors, (deltaBiases, deltaWeights))
  where
   deltaBiases = map (learningRate *) nextErrors
-  deltaWeights = [[x * y * learningRate | y <- prevActivations] | x <- nextErrors] -- TODO: not sure inside/out here
+  deltaWeights = [[x * y * learningRate | y <- prevActivations] | x <- nextErrors]
   prevErrors = transpose weightMatrix *^ nextErrors *. map relu' prevActivations -- Actually relu' prevZ but who cares
-  -- TODO: Not sure with transpose.
 
 learn :: [Layer] -> ([Activation], [Activation]) -> [Layer]
-learn layers (inputs, desiredOutputs) = layers -. snd (mapAccumR backpropagate (zipWith cost' (last computedActivations) desiredOutputs) (zip layers computedActivations))
+learn layers (inputs, desiredOutputs) = layers -. gradient
  where
-  computedActivations = scanl applyLayer inputs layers -- TODO: Check this...
+  errors = zipWith cost' (last computedActivations) desiredOutputs
+  gradient = snd (mapAccumR backpropagate errors (zip layers computedActivations))
+  computedActivations = scanl applyLayer inputs layers
 
 -- TESTING AND ANALYSIS --
 
